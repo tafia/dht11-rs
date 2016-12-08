@@ -8,7 +8,6 @@ use sysfs_gpio::{Pin, Direction};
 use sysfs_gpio::Error::Unexpected;
 use std::thread;
 use std::time::{Duration, SystemTime};
-use errors::*;
 
 pub struct DHT11 {
     pin: Pin,
@@ -24,7 +23,7 @@ impl DHT11 {
     }
 
     /// Reads humidity and temperature
-    pub fn read(&mut self) -> Result<Response> {
+    pub fn read(&mut self) -> errors::Result<Response> {
 
         let mut intervals = [0; 40];
         if let Err(e) = self.pin.with_exported(|| {
@@ -65,7 +64,7 @@ impl DHT11 {
     }
 
     fn next_pulse(&self, level: u8) -> ::sysfs_gpio::Result<()> {
-        for _ in 0..500 {
+        for _ in 0..200 {
             if self.pin.get_value()? == level { return Ok(()); }
             thread::sleep(Duration::new(0, 1000));
         }
@@ -75,9 +74,9 @@ impl DHT11 {
     /// Measures the duration in nanoseconds of a cycle with indicative low and high durations
     fn next_cycle_ns(&self, low_ns: u32, high_ns: u32) -> ::sysfs_gpio::Result<u32> {
         let start = SystemTime::now();
-        thread::sleep(Duration::new(0, low_ns * 3 / 4));
+        thread::sleep(Duration::new(0, low_ns / 2));
         self.next_pulse(1)?;
-        thread::sleep(Duration::new(0, high_ns * 3 / 4));
+        thread::sleep(Duration::new(0, high_ns / 2));
         self.next_pulse(0)?;
         Ok(start.elapsed().unwrap().subsec_nanos())
     }
