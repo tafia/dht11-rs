@@ -1,25 +1,20 @@
+#[derive(Debug)]
+pub enum Error {
+    Gpio(::cupi::Error),
+    Time(::std::time::SystemTimeError),
+    TimeOut
+}
 
-#![allow(missing_docs)]
+pub type Result<T> = ::std::result::Result<T, Error>;
 
-error_chain! {
-    types {
-        Error, ErrorKind, Result;
+impl From<::cupi::Error> for Error {
+    fn from(error: ::cupi::Error) -> Error {
+        Error::Gpio(error)
     }
+}
 
-//     links {
-//         rustup_dist::Error, rustup_dist::ErrorKind, Dist;
-//         rustup_utils::Error, rustup_utils::ErrorKind, Utils;
-//     }
-
-    foreign_links {
-        ::sysfs_gpio::Error, Gpio;
-        ::std::time::SystemTimeError, Time;
+impl From<::std::time::SystemTimeError> for Error {
+    fn from(error: ::std::time::SystemTimeError) -> Error {
+        Error::Time(error)
     }
-
-//     errors {
-//         InvalidToolchainName(t: String) {
-//             description("invalid toolchain name")
-//             display("invalid toolchain name: '{}'", t)
-//         }
-//     }
 }

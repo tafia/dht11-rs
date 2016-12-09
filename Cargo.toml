@@ -5,5 +5,5 @@ authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "A driver for DHT11 temperature and humidity sensor"
 
 [dependencies]
-sysfs_gpio = "0.4.4"
-error-chain = "0.6.2"
+# cupi = { git = "https://github.com/inre/cupi" }
+cupi = "0.1.0"

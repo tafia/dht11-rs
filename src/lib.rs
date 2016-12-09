@@ -1,54 +1,46 @@
-extern crate sysfs_gpio;
-#[macro_use]
-extern crate error_chain;
+extern crate cupi;
 
 mod errors;
 
-use sysfs_gpio::{Pin, Direction};
-use sysfs_gpio::Error::Unexpected;
 use std::thread;
 use std::time::{Duration, SystemTime};
+use cupi::{CuPi, delay_ms, DigitalRead, DigitalWrite, Logic, PinOptions, PinInput};
+use errors::{Error, Result};
 
 pub struct DHT11 {
-    pin: Pin,
+    pin: PinOptions,
 }
 
 impl DHT11 {
 
     /// Initialize a new connection on pin with DHT11 sensor
-    pub fn new(pin_num: u64) -> DHT11 {
-        DHT11 {
-            pin: Pin::new(pin_num),
-        }
+    pub fn new(pin_num: usize) -> Result<DHT11> {
+        Ok(DHT11 {
+            pin: CuPi::new()?.pin(pin_num)?,
+        })
     }
 
     /// Reads humidity and temperature
-    pub fn read(&mut self) -> errors::Result<Response> {
+    pub fn read(&mut self) -> Result<Response> {
 
+        // send init signal
+        {
+            let mut output = self.pin.output();
+            output.digital_write(Logic::Low)?;
+            delay_ms(18);
+            output.digital_write(Logic::High)?;
+            delay_usec(40);
+        }
+
+        // get sensor response
         let mut intervals = [0; 40];
-        if let Err(e) = self.pin.with_exported(|| {
-
-            // send init signal
-            self.pin.set_direction(Direction::Out)?;
-            self.pin.set_value(0)?;
-            thread::sleep(Duration::new(0, 18_000_000));
-            self.pin.set_value(1)?;
-            thread::sleep(Duration::new(0, 40_000));
-
-            // getting sensor response
-            self.pin.set_direction(Direction::In)?;
-            self.next_pulse(0)?;
-            self.next_cycle_ns(80_000, 80_000)?; // init response
-
-            // 40 bit data
+        {
+            let mut input = self.pin.input();
+            next_pulse(&mut input, Logic::Low)?;
+            next_cycle_ns(&mut input, 80_000, 80_000)?; // init response
             for t in intervals.iter_mut() {
-                *t = self.next_cycle_ns(50_000, 26_000)?; // bit data
+                *t = next_cycle_ns(&mut input, 50_000, 26_000)?; // bit data
             }
-            Ok(())
-
-        }) {
-            println!("intervals: {:?}", intervals.as_ref());
-            return Err(e.into());
         }
 
         // convert intervals to bytes
@@ -61,24 +53,6 @@ impl DHT11 {
         }
 
         Ok(Response { bytes: bytes })
-    }
-
-    fn next_pulse(&self, level: u8) -> ::sysfs_gpio::Result<()> {
-        for _ in 0..200 {
-            if self.pin.get_value()? == level { return Ok(()); }
-            thread::sleep(Duration::new(0, 1000));
-        }
-        Err(Unexpected("Timeout".to_string()))
-    }
-
-    /// Measures the duration in nanoseconds of a cycle with indicative low and high durations
-    fn next_cycle_ns(&self, low_ns: u32, high_ns: u32) -> ::sysfs_gpio::Result<u32> {
-        let start = SystemTime::now();
-        thread::sleep(Duration::new(0, low_ns / 2));
-        self.next_pulse(1)?;
-        thread::sleep(Duration::new(0, high_ns / 2));
-        self.next_pulse(0)?;
-        Ok(start.elapsed().unwrap().subsec_nanos())
     }
 
 }
@@ -98,4 +72,28 @@ impl Response {
     pub fn get_humidity(&self) -> f32 {
         self.bytes[0] as f32 + self.bytes[1] as f32 / 1000.
     }
+}
+
+fn delay_usec(usec: u32) {
+    thread::sleep(Duration::new(0, usec * 1000));
+}
+                
+fn next_pulse(input: &mut PinInput, level: Logic) -> Result<()> {
+    for _ in 0..500 {
+        match (level, input.digital_read()?) {
+            (Logic::Low, Logic::Low) | (Logic::High, Logic::High) => return Ok(()),
+            _ => delay_usec(1),
+        }
+    }
+    Err(Error::TimeOut)
+}
+
+/// Measures the duration in nanoseconds of a cycle with indicative low and high durations
+fn next_cycle_ns(input: &mut PinInput, low_us: u32, high_us: u32) -> Result<u32> {
+    let start = SystemTime::now();
+    delay_usec(low_us * 3 / 4);
+    next_pulse(input, Logic::High)?; 
+    delay_usec(high_us * 3 / 4);
+    next_pulse(input, Logic::Low)?; 
+    Ok(start.elapsed().unwrap().subsec_nanos())
 }
