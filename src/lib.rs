@@ -6,7 +6,7 @@ mod errors;
 
 use sysfs_gpio::{Pin, Direction, Edge};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use errors::*;
 
 pub struct DHT11 {
@@ -33,15 +33,15 @@ impl DHT11 {
             self.pin.set_value(0)?;
             thread::sleep(Duration::from_millis(18));
             self.pin.set_value(1)?;
-            thread::sleep(Duration::new(0, 40_000));
+            delay_us(40);
 
             // getting sensor data
-            let start = SystemTime::now();
+            let start = Instant::now();
             let mut poller = self.pin.get_poller()?;
             self.pin.set_direction(Direction::In)?;
             self.pin.set_edge(Edge::FallingEdge)?;
             while poller.poll(1)?.is_some() {
-                times.push(start.elapsed().unwrap());
+                times.push(start.elapsed());
             }
             Ok(())
         })?;
@@ -57,17 +57,17 @@ impl DHT11 {
         }
 
         // checksum
-        // let sum: u16 = bytes.iter().take(4).map(|b| *b as u16).sum();
-        // if bytes[4] as u16 != sum & 0x00FF {
-        //     Err("Invalid checksum".into())
-        // } else {
+        let sum: u16 = bytes.iter().take(4).map(|b| *b as u16).sum();
+        if bytes[4] as u16 != sum & 0x00FF {
+            Err("Invalid checksum".into())
+        } else {
             Ok(Response {
                 h_int: bytes[0],
                 h_dec: bytes[1],
                 t_int: bytes[2],
                 t_dec: bytes[3],
             })
-        //}
+        }
     }
 
 }
@@ -85,5 +85,15 @@ impl Response {
     }
     pub fn get_humidity(&self) -> f32 {
         self.h_int as f32 + self.h_dec as f32 / 1000.
+    }
+}
+
+/// Delays below 100 microseconds cannot reliably use regular sleep
+///
+/// Takes the same approach than wiringpi and use brutal force ...
+fn delay_us(usec: u32) {
+    let end = Instant::now() + Duration::new(0, usec * 1000);
+    loop {
+        if Instant::now() >= end { break; }
     }
 }
