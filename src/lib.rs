@@ -37,9 +37,9 @@ impl DHT11 {
         {
             let mut input = self.pin.input();
             next_pulse(&mut input, Logic::Low)?;
-            next_cycle_ns(&mut input, 80_000, 80_000)?; // init response
+            next_cycle_ns(&mut input, 80, 80)?; // init response
             for t in intervals.iter_mut() {
-                *t = next_cycle_ns(&mut input, 50_000, 26_000)?; // bit data
+                *t = next_cycle_ns(&mut input, 50, 26)?; // bit data
             }
         }
 
