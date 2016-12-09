@@ -2,8 +2,7 @@ extern crate cupi;
 
 mod errors;
 
-use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use cupi::{CuPi, delay_ms, DigitalRead, DigitalWrite, Logic, PinOptions, PinInput};
 use errors::{Error, Result};
 
@@ -29,7 +28,7 @@ impl DHT11 {
             output.digital_write(Logic::Low)?;
             delay_ms(18);
             output.digital_write(Logic::High)?;
-            delay_usec(40);
+            delay_us(40);
         }
 
         // get sensor response
@@ -74,15 +73,17 @@ impl Response {
     }
 }
 
-fn delay_usec(usec: u32) {
-    thread::sleep(Duration::new(0, usec * 1000));
+/// Use brutal force to delay under 100 microseconds (following wiringpi example)
+fn delay_us(usec: u32) {
+    let end = Instant::now() + Duration::new(0, usec * 1000);
+    while Instant::now() < end {}
 }
                 
 fn next_pulse(input: &mut PinInput, level: Logic) -> Result<()> {
     for _ in 0..500 {
         match (level, input.digital_read()?) {
             (Logic::Low, Logic::Low) | (Logic::High, Logic::High) => return Ok(()),
-            _ => delay_usec(1),
+            _ => delay_us(1),
         }
     }
     Err(Error::TimeOut)
@@ -90,10 +91,10 @@ fn next_pulse(input: &mut PinInput, level: Logic) -> Result<()> {
 
 /// Measures the duration in nanoseconds of a cycle with indicative low and high durations
 fn next_cycle_ns(input: &mut PinInput, low_us: u32, high_us: u32) -> Result<u32> {
-    let start = SystemTime::now();
-    delay_usec(low_us * 3 / 4);
+    let start = Instant::now();
+    delay_us(low_us * 3 / 4);
     next_pulse(input, Logic::High)?; 
-    delay_usec(high_us * 3 / 4);
+    delay_us(high_us * 3 / 4);
     next_pulse(input, Logic::Low)?; 
-    Ok(start.elapsed().unwrap().subsec_nanos())
+    Ok(start.elapsed().subsec_nanos())
 }
