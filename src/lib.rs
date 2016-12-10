@@ -1,99 +1,92 @@
-extern crate sysfs_gpio;
-#[macro_use]
-extern crate error_chain;
+extern crate wiringpi;
 
-mod errors;
+use wiringpi::pin::{WiringPi, InputPin};
+use wiringpi::pin::Value::{self, Low, High};
+use wiringpi::time::{delay, delay_microseconds};
 
-use sysfs_gpio::{Pin, Direction, Edge};
-use std::thread;
-use std::time::{Duration, Instant};
-use errors::*;
+#[derive(Debug)]
+pub enum Error {
+    TimeOut,
+    CheckSum,
+}
+
+pub type Result<T> = ::std::result::Result<T, Error>;
 
 pub struct DHT11 {
-    pin: Pin,
+    pi: wiringpi::WiringPi<WiringPi>,
+    pin: u16,
 }
 
 impl DHT11 {
 
     /// Initialize a new connection on pin with DHT11 sensor
-    pub fn new(pin_num: u64) -> DHT11 {
+    pub fn new(pin_num: u16) -> DHT11 {
         DHT11 {
-            pin: Pin::new(pin_num),
+            pi: wiringpi::setup(),
+            pin: pin_num,
         }
     }
 
     /// Reads humidity and temperature
-    pub fn read(&mut self) -> Result<Response> {
+    pub fn read(&mut self) -> Result<Measures> {
 
-        let mut times = Vec::with_capacity(41);
-        self.pin.with_exported(|| {
+        // send init request
+        {
+            let output = self.pi.output_pin(self.pin);
+            output.digital_write(Low);
+            delay(18);
+            output.digital_write(High);
+            delay_microseconds(40);
+        }
 
-            // send init signal
-            self.pin.set_direction(Direction::Low)?;
-            self.pin.set_value(0)?;
-            thread::sleep(Duration::from_millis(18));
-            self.pin.set_value(1)?;
-            delay_us(40);
-
-            // getting sensor data
-            let start = Instant::now();
-            let mut poller = self.pin.get_poller()?;
-            self.pin.set_direction(Direction::In)?;
-            self.pin.set_edge(Edge::FallingEdge)?;
-            while poller.poll(1)?.is_some() {
-                times.push(start.elapsed());
-            }
-            Ok(())
-        })?;
-
-        // convert times to bytes
-        let mut intervals = times.windows(2).map(|w| w[1] - w[0]);
+        // get data from sensor
         let mut bytes = [0u8; 5];
-        for val in bytes.iter_mut() {
-            for i in intervals.by_ref().take(8) {
-                *val <<= 1;
-                if i > Duration::new(0, 80_000) { *val |= 1; }
+        {
+            let input = self.pi.input_pin(self.pin);
+            wait_level(&input, Low)?;
+            wait_level(&input, High)?;
+            wait_level(&input, Low)?;
+            for b in bytes.iter_mut() {
+                for _ in 0..8 {
+                    *b <<= 1;
+                    wait_level(&input, High)?;
+                    let dur = wait_level(&input, Low)?;
+                    if dur > 16 { *b |= 1; }
+                }
             }
         }
 
-        // checksum
         let sum: u16 = bytes.iter().take(4).map(|b| *b as u16).sum();
-        if bytes[4] as u16 != sum & 0x00FF {
-            Err("Invalid checksum".into())
-        } else {
-            Ok(Response {
-                h_int: bytes[0],
-                h_dec: bytes[1],
-                t_int: bytes[2],
-                t_dec: bytes[3],
+        if bytes[4] as u16 == sum & 0x00FF {
+            Ok(Measures { 
+                temperature: bytes[2],
+                humidity: bytes[0],
             })
+        } else {
+            Err(Error::CheckSum)
         }
     }
 
 }
 
-pub struct Response {
-    h_int: u8,
-    h_dec: u8,
-    t_int: u8,
-    t_dec: u8,
+fn wait_level(pin: &InputPin<WiringPi>, level: Value) -> Result<u8> {
+    for i in 0u8..255 {
+        if pin.digital_read() == level { return Ok(i); }
+        delay_microseconds(1);
+    }
+    Err(Error::TimeOut)
 }
 
-impl Response {
-    pub fn get_temperature(&self) -> f32 {
-        self.t_int as f32 + self.t_dec as f32 / 1000.
-    }
-    pub fn get_humidity(&self) -> f32 {
-        self.h_int as f32 + self.h_dec as f32 / 1000.
-    }
+pub struct Measures {
+    temperature: u8,
+    humidity: u8,
 }
 
-/// Delays below 100 microseconds cannot reliably use regular sleep
-///
-/// Takes the same approach than wiringpi and use brutal force ...
-fn delay_us(usec: u32) {
-    let end = Instant::now() + Duration::new(0, usec * 1000);
-    loop {
-        if Instant::now() >= end { break; }
+impl Measures {
+    pub fn get_temperature(&self) -> u8 {
+        self.temperature
+    }
+    pub fn get_humidity(&self) -> u8 {
+        self.humidity
     }
 }
