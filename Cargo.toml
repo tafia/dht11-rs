@@ -5,5 +5,5 @@ authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "A driver for DHT11 temperature and humidity sensor"
 
 [dependencies]
-sysfs_gpio = "0.4.4"
-error-chain = "0.6.2"
+# TODO: update with crates.io when PR #7 has been merged
+cupi = { git = "https://github.com/tafia/cupi", branch = "mio_update" }
