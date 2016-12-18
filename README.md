@@ -1,3 +1,10 @@
+# dht11-rs
+
+An API to read from pht11 temperature and humidity sensor on rapsberry pi.
+
+## Example
+
+```rust
 extern crate dht11;
 
 use dht11::DHT11;
@@ -20,3 +27,4 @@ fn main() {
         thread::sleep(Duration::from_millis(1000));
     }
 }
+```

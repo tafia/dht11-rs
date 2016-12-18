@@ -2,7 +2,8 @@
 name = "dht11"
 version = "0.1.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
-description = "A driver for DHT11 temperature and humidity sensor"
+description = "A driver for DHT11 temperature and humidity sensor on raspberry pi"
+keywords = ["raspberry", "pi", "sensor", "temperature", "humidity"]
 
 [dependencies]
 # TODO: update with crates.io when PR #7 has been merged
