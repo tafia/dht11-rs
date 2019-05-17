@@ -1,10 +1,11 @@
 [package]
 name = "dht11"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
-description = "A driver for DHT11 temperature and humidity sensor on raspberry pi"
-keywords = ["raspberry", "pi", "sensor", "temperature", "humidity"]
+description = "A driver for DHT11 temperature and humidity sensor"
+keywords = ["embedded-hal", "temperature", "humidity"]
+edition = "2018"
 
 [dependencies]
-# TODO: update with crates.io when PR #7 has been merged
-cupi = { git = "https://github.com/tafia/cupi", branch = "mio_update" }
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
+nb = "0.1.2"

@@ -1,7 +1,7 @@
 extern crate dht11;
 
-use std::time::Instant;
 use dht11::delay_us;
+use std::time::Instant;
 
 fn main() {
     let s = Instant::now();
